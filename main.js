@@ -1,5 +1,5 @@
 // ============================================
-// CHESS ARENA — Complete Application
+// CHESS ARENA — COMPLETE FIXED VERSION
 // ============================================
 
 // ============================
@@ -25,6 +25,7 @@ const Toast = {
         this.container = document.getElementById('toastContainer');
     },
     show(msg, type = 'info', duration = 3000) {
+        if (!this.container) return;
         const t = document.createElement('div');
         t.className = `toast toast-${type}`;
         const icons = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' };
@@ -38,9 +39,7 @@ const Toast = {
         setTimeout(() => this._remove(t), duration);
         return t;
     },
-    _remove(t) {
-        if (t.parentNode) { t.remove(); }
-    },
+    _remove(t) { if (t.parentNode) t.remove(); },
     success(msg, d) { return this.show(msg, 'success', d); },
     error(msg, d) { return this.show(msg, 'error', d); },
     warning(msg, d) { return this.show(msg, 'warning', d); },
@@ -114,7 +113,6 @@ const Auth = {
     _current: null,
 
     init() {
-        // Load mock users from storage
         this._users = storage.get('users', []);
         const session = storage.get('session');
         if (session) {
@@ -143,7 +141,7 @@ const Auth = {
                     id: 'u_' + Date.now(),
                     username,
                     email,
-                    password: btoa(password), // simple hash (demo only)
+                    password: btoa(password),
                     rating: 1200,
                     games: 0,
                     wins: 0,
@@ -199,7 +197,7 @@ const Auth = {
 };
 
 // ============================
-// 5. CHESS ENGINE (Pure JS)
+// 5. CHESS ENGINE
 // ============================
 
 class ChessEngine {
@@ -220,6 +218,7 @@ class ChessEngine {
         this.halfMoveClock = 0;
         this.fullMoveCount = 1;
         this.moveLog = [];
+        this.lastMove = null;
     }
 
     initBoard() {
@@ -259,18 +258,14 @@ class ChessEngine {
         const dir = color === 'white' ? -1 : 1;
         const startRow = color === 'white' ? 6 : 1;
 
-        // Pawn
         if (type === 'p') {
-            // Forward
             const nr = r + dir;
             if (this.inBounds(nr, c) && !this.board[nr][c]) {
                 moves.push([nr, c]);
-                // Double move
                 if (r === startRow && !this.board[r + 2 * dir][c]) {
                     moves.push([r + 2 * dir, c]);
                 }
             }
-            // Captures
             for (const dc of [-1, 1]) {
                 const nc = c + dc;
                 if (this.inBounds(nr, nc)) {
@@ -278,7 +273,6 @@ class ChessEngine {
                     if (target && target.color === enemy) {
                         moves.push([nr, nc]);
                     }
-                    // En passant
                     if (this.enPassant && this.enPassant[0] === nr && this.enPassant[1] === nc) {
                         moves.push([nr, nc]);
                     }
@@ -287,21 +281,10 @@ class ChessEngine {
             return moves;
         }
 
-        // Knight
         if (type === 'n') {
-            const offsets = [
-                [-2, -1],
-                [-2, 1],
-                [-1, -2],
-                [-1, 2],
-                [1, -2],
-                [1, 2],
-                [2, -1],
-                [2, 1]
-            ];
+            const offsets = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]];
             for (const [dr, dc] of offsets) {
-                const nr = r + dr,
-                    nc = c + dc;
+                const nr = r + dr, nc = c + dc;
                 if (this.inBounds(nr, nc)) {
                     const target = this.board[nr][nc];
                     if (!target || target.color === enemy) moves.push([nr, nc]);
@@ -310,7 +293,6 @@ class ChessEngine {
             return moves;
         }
 
-        // Bishop, Rook, Queen
         const dirs = [];
         if (type === 'b' || type === 'q') {
             dirs.push([-1, -1], [-1, 1], [1, -1], [1, 1]);
@@ -319,8 +301,7 @@ class ChessEngine {
             dirs.push([-1, 0], [1, 0], [0, -1], [0, 1]);
         }
         for (const [dr, dc] of dirs) {
-            let nr = r + dr,
-                nc = c + dc;
+            let nr = r + dr, nc = c + dc;
             while (this.inBounds(nr, nc)) {
                 const target = this.board[nr][nc];
                 if (target) {
@@ -332,19 +313,17 @@ class ChessEngine {
                 nc += dc;
             }
         }
-        // King
+
         if (type === 'k') {
             for (let dr = -1; dr <= 1; dr++)
                 for (let dc = -1; dc <= 1; dc++) {
                     if (dr === 0 && dc === 0) continue;
-                    const nr = r + dr,
-                        nc = c + dc;
+                    const nr = r + dr, nc = c + dc;
                     if (this.inBounds(nr, nc)) {
                         const target = this.board[nr][nc];
                         if (!target || target.color === enemy) moves.push([nr, nc]);
                     }
                 }
-            // Castling
             if (color === 'white' && r === 7 && c === 4) {
                 if (this.castling.whiteKing && !this.board[7][5] && !this.board[7][6]) {
                     if (!this.isSquareAttacked(7, 4, 'black') && !this.isSquareAttacked(7, 5, 'black') && !this.isSquareAttacked(7, 6, 'black')) {
@@ -394,43 +373,33 @@ class ChessEngine {
         const pseudo = this.getPseudoLegalMoves(r, c);
         const legal = [];
         for (const [tr, tc] of pseudo) {
-            // Simulate move
             const captured = this.board[tr][tc];
             const enPassantCapture = this.enPassant && this.enPassant[0] === tr && this.enPassant[1] === tc;
             const enPassantPawn = enPassantCapture ? this.board[r][tc] : null;
 
             this.board[tr][tc] = piece;
             this.board[r][c] = null;
-
-            // Handle en passant capture
             if (enPassantCapture) {
                 this.board[r][tc] = null;
             }
 
-            // Handle castling
             const isCastling = piece.type === 'k' && Math.abs(c - tc) === 2;
             if (isCastling) {
-                if (tc === 6) { this.board[r][5] = this.board[r][7];
-                    this.board[r][7] = null; }
-                if (tc === 2) { this.board[r][3] = this.board[r][0];
-                    this.board[r][0] = null; }
+                if (tc === 6) { this.board[r][5] = this.board[r][7]; this.board[r][7] = null; }
+                if (tc === 2) { this.board[r][3] = this.board[r][0]; this.board[r][0] = null; }
             }
 
-            // Check if king is in check
             const king = this.findKing(piece.color);
             const inCheck = king ? this.isSquareAttacked(king[0], king[1], piece.color === 'white' ? 'black' : 'white') : true;
 
-            // Undo
             this.board[r][c] = piece;
             this.board[tr][tc] = captured;
             if (enPassantCapture) {
                 this.board[r][tc] = enPassantPawn;
             }
             if (isCastling) {
-                if (tc === 6) { this.board[r][7] = this.board[r][5];
-                    this.board[r][5] = null; }
-                if (tc === 2) { this.board[r][0] = this.board[r][3];
-                    this.board[r][3] = null; }
+                if (tc === 6) { this.board[r][7] = this.board[r][5]; this.board[r][5] = null; }
+                if (tc === 2) { this.board[r][0] = this.board[r][3]; this.board[r][3] = null; }
             }
 
             if (!inCheck) {
@@ -469,28 +438,13 @@ class ChessEngine {
         const isCastling = piece.type === 'k' && Math.abs(fromC - toC) === 2;
         const isPromotion = piece.type === 'p' && (toR === 0 || toR === 7);
 
-        // Save state for undo
-        const state = {
-            from: [fromR, fromC],
-            to: [toR, toC],
-            piece,
-            captured,
-            enPassant: this.enPassant,
-            castling: { ...this.castling },
-            halfMoveClock: this.halfMoveClock,
-            kingPos: { ...this.kingPos }
-        };
-
-        // Execute move
         this.board[toR][toC] = piece;
         this.board[fromR][fromC] = null;
 
-        // En passant
         if (isEnPassant) {
             this.board[fromR][toC] = null;
         }
 
-        // Castling
         if (isCastling) {
             if (toC === 6) {
                 this.board[fromR][5] = this.board[fromR][7];
@@ -502,17 +456,13 @@ class ChessEngine {
             }
         }
 
-        // Update king position
         if (piece.type === 'k') {
             this.kingPos[piece.color] = [toR, toC];
         }
 
-        // Update castling rights
         if (piece.type === 'k') {
-            if (piece.color === 'white') { this.castling.whiteKing = false;
-                this.castling.whiteQueen = false; }
-            if (piece.color === 'black') { this.castling.blackKing = false;
-                this.castling.blackQueen = false; }
+            if (piece.color === 'white') { this.castling.whiteKing = false; this.castling.whiteQueen = false; }
+            if (piece.color === 'black') { this.castling.blackKing = false; this.castling.blackQueen = false; }
         }
         if (piece.type === 'r') {
             if (fromR === 7 && fromC === 0) this.castling.whiteQueen = false;
@@ -527,17 +477,27 @@ class ChessEngine {
             if (toR === 0 && toC === 7) this.castling.blackKing = false;
         }
 
-        // En passant
         this.enPassant = null;
         if (piece.type === 'p' && Math.abs(fromR - toR) === 2) {
             this.enPassant = [(fromR + toR) / 2, fromC];
         }
 
-        // Half move clock
         this.halfMoveClock = (piece.type === 'p' || captured) ? 0 : this.halfMoveClock + 1;
 
-        // Move log
-        const notation = this.getNotation(fromR, fromC, toR, toC, piece, captured, isEnPassant, isCastling, isPromotion);
+        const files = 'abcdefgh';
+        const from = files[fromC] + (8 - fromR);
+        const to = files[toC] + (8 - toR);
+        let notation = '';
+        if (isCastling) {
+            notation = toC === 6 ? 'O-O' : 'O-O-O';
+        } else {
+            const p = piece.type.toUpperCase();
+            if (p !== 'P') notation += p;
+            if (captured || isEnPassant) notation += 'x';
+            notation += to;
+            if (isPromotion) notation += '=Q';
+        }
+
         this.moveLog.push({
             from: [fromR, fromC],
             to: [toR, toC],
@@ -549,20 +509,16 @@ class ChessEngine {
             isPromotion
         });
 
-        // Promotion
+        this.lastMove = { from: [fromR, fromC], to: [toR, toC] };
+
         if (isPromotion) {
-            // Return promotion info
-            return { ...state, promotion: true };
+            return { promotion: true, toR, toC };
         }
 
-        // Switch turn
         this.turn = this.turn === 'white' ? 'black' : 'white';
         this.fullMoveCount += this.turn === 'white' ? 0 : 1;
-
-        // Update status
         this.updateStatus();
-
-        return state;
+        return { success: true };
     }
 
     promote(toR, toC, type) {
@@ -582,86 +538,25 @@ class ChessEngine {
         const inCheck = king ? this.isSquareAttacked(king[0], king[1], color === 'white' ? 'black' : 'white') : false;
 
         if (moves.length === 0) {
-            if (inCheck) {
-                this.status = 'checkmate';
-            } else {
-                this.status = 'stalemate';
-            }
+            this.status = inCheck ? 'checkmate' : 'stalemate';
         } else if (inCheck) {
             this.status = 'check';
         } else {
             this.status = 'playing';
         }
 
-        // Draw conditions (simplified)
-        if (this.halfMoveClock >= 100) {
-            this.status = 'draw';
-        }
-        // Insufficient material (simplified)
         const pieces = [];
         for (let r = 0; r < 8; r++)
             for (let c = 0; c < 8; c++) {
                 const p = this.board[r][c];
                 if (p) pieces.push(p);
             }
-        if (pieces.length === 2) this.status = 'draw';
-        if (pieces.length === 3 && pieces.some(p => p.type === 'b' || p.type === 'n')) this.status = 'draw';
-    }
-
-    getNotation(fromR, fromC, toR, toC, piece, captured, enPassant, castling, promotion) {
-        const files = 'abcdefgh';
-        const ranks = '87654321';
-        const from = files[fromC] + ranks[fromR];
-        const to = files[toC] + ranks[toR];
-
-        if (castling) {
-            return toC === 6 ? 'O-O' : 'O-O-O';
+        if (pieces.length === 2 || (pieces.length === 3 && pieces.some(p => p.type === 'b' || p.type === 'n'))) {
+            this.status = 'draw';
         }
-
-        let n = '';
-        const p = piece.type.toUpperCase();
-        if (p !== 'P') n += p;
-        if (captured || enPassant) n += 'x';
-        n += to;
-        if (promotion) n += '=Q';
-        if (this.status === 'checkmate') n += '#';
-        else if (this.status === 'check') n += '+';
-        return n;
-    }
-
-    getFen() {
-        let fen = '';
-        for (let r = 0; r < 8; r++) {
-            let empty = 0;
-            for (let c = 0; c < 8; c++) {
-                const p = this.board[r][c];
-                if (p) {
-                    if (empty) { fen += empty;
-                        empty = 0; }
-                    const sym = p.type.toUpperCase();
-                    fen += p.color === 'white' ? sym : sym.toLowerCase();
-                } else {
-                    empty++;
-                }
-            }
-            if (empty) fen += empty;
-            if (r < 7) fen += '/';
+        if (this.halfMoveClock >= 100) {
+            this.status = 'draw';
         }
-        fen += ' ' + (this.turn === 'white' ? 'w' : 'b');
-        fen += ' ' + this.getCastlingFen();
-        fen += ' ' + (this.enPassant ? String.fromCharCode(97 + this.enPassant[1]) + (8 - this.enPassant[0]) : '-');
-        fen += ' ' + this.halfMoveClock;
-        fen += ' ' + this.fullMoveCount;
-        return fen;
-    }
-
-    getCastlingFen() {
-        let s = '';
-        if (this.castling.whiteKing) s += 'K';
-        if (this.castling.whiteQueen) s += 'Q';
-        if (this.castling.blackKing) s += 'k';
-        if (this.castling.blackQueen) s += 'q';
-        return s || '-';
     }
 
     clone() {
@@ -675,12 +570,13 @@ class ChessEngine {
         e.fullMoveCount = this.fullMoveCount;
         e.kingPos = { white: [...this.kingPos.white], black: [...this.kingPos.black] };
         e.moveLog = this.moveLog.map(m => ({ ...m }));
+        e.lastMove = this.lastMove ? { from: [...this.lastMove.from], to: [...this.lastMove.to] } : null;
         return e;
     }
 }
 
 // ============================
-// 6. STOCKFISH AI (Mock)
+// 6. STOCKFISH AI
 // ============================
 
 class StockfishAI {
@@ -696,19 +592,15 @@ class StockfishAI {
 
         const depth = this.depths[this.difficulty] || 2;
 
-        // Score each move with minimax
         const scored = moves.map(m => {
             const copy = engine.clone();
             const result = copy.makeMove(m.from[0], m.from[1], m.to[0], m.to[1]);
             if (!result) return { move: m, score: -9999 };
-
-            // If promotion, assume queen
             if (result.promotion) {
                 copy.promote(m.to[0], m.to[1], 'q');
             }
 
             let score = this.evaluate(copy, color);
-            // Recursive lookahead
             if (depth > 1) {
                 const enemyMoves = copy.getAllLegalMoves(color === 'white' ? 'black' : 'white');
                 if (enemyMoves.length > 0) {
@@ -725,20 +617,16 @@ class StockfishAI {
                     score = score - bestEnemy * 0.3;
                 }
             }
-
             return { move: m, score };
         });
 
-        // Sort by score descending
         scored.sort((a, b) => b.score - a.score);
 
-        // Add some randomness based on difficulty
         const topN = this.difficulty === 'easy' ? Math.min(6, scored.length) :
             this.difficulty === 'medium' ? Math.min(3, scored.length) : 1;
 
         const pick = scored.slice(0, topN);
         const idx = Math.floor(Math.random() * pick.length);
-
         return pick[idx]?.move || null;
     }
 
@@ -752,7 +640,6 @@ class StockfishAI {
                 if (p) {
                     const val = pieceValues[p.type] || 0;
                     const sign = p.color === color ? 1 : -1;
-                    // Position bonuses (simplified)
                     let bonus = 0;
                     if (p.type === 'p') {
                         const row = p.color === 'white' ? 7 - r : r;
@@ -765,7 +652,6 @@ class StockfishAI {
                 }
             }
         }
-        // Mobility bonus
         const moves = engine.getAllLegalMoves(color);
         const enemyMoves = engine.getAllLegalMoves(color === 'white' ? 'black' : 'white');
         score += (moves.length - enemyMoves.length) * 5;
@@ -788,19 +674,12 @@ class BoardRenderer {
         this.selected = null;
         this.legalMoves = [];
         this.lastMove = null;
-        this.pieceImages = {};
         this.isAIThinking = false;
-        this.render();
-        this.loadPieces();
-    }
-
-    loadPieces() {
-        // SVG pieces as inline data (using Unicode fallback)
-        const pieceMap = {
+        this.pieceMap = {
             'white': { 'k': '♔', 'q': '♕', 'r': '♖', 'b': '♗', 'n': '♘', 'p': '♙' },
             'black': { 'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟' }
         };
-        this.pieceMap = pieceMap;
+        this.render();
     }
 
     render() {
@@ -822,7 +701,6 @@ class BoardRenderer {
                 sq.dataset.row = row;
                 sq.dataset.col = col;
 
-                // Coordinates
                 if (col === 0) {
                     const rank = document.createElement('span');
                     rank.className = 'coord coord-rank';
@@ -836,22 +714,17 @@ class BoardRenderer {
                     sq.appendChild(file);
                 }
 
-                // Piece
                 const p = this.engine.board[row][col];
                 if (p) {
                     const span = document.createElement('span');
                     span.className = 'piece';
-                    const symbol = this.pieceMap[p.color][p.type];
-                    span.textContent = symbol;
+                    span.textContent = this.pieceMap[p.color][p.type];
                     span.style.fontSize = '3.5rem';
                     span.style.lineHeight = '1';
                     span.style.userSelect = 'none';
-                    span.dataset.piece = p.type;
-                    span.dataset.color = p.color;
                     sq.appendChild(span);
                 }
 
-                // Legal move indicators
                 const isLegal = this.legalMoves.some(([tr, tc]) => tr === row && tc === col);
                 if (isLegal) {
                     if (this.engine.board[row][col]) {
@@ -865,7 +738,6 @@ class BoardRenderer {
                     }
                 }
 
-                // Last move highlight
                 if (this.lastMove) {
                     if ((this.lastMove.from[0] === row && this.lastMove.from[1] === col) ||
                         (this.lastMove.to[0] === row && this.lastMove.to[1] === col)) {
@@ -873,12 +745,10 @@ class BoardRenderer {
                     }
                 }
 
-                // Selected
                 if (this.selected && this.selected[0] === row && this.selected[1] === col) {
                     sq.classList.add('selected');
                 }
 
-                // Check indicator
                 const king = this.engine.findKing(this.engine.turn);
                 if (king && king[0] === row && king[1] === col && this.engine.status === 'check') {
                     const ind = document.createElement('div');
@@ -895,11 +765,13 @@ class BoardRenderer {
     }
 
     handleClick(row, col) {
-        if (this.isAIThinking) return;
+        if (this.isAIThinking) {
+            Toast.warning('Computer is thinking...');
+            return;
+        }
 
         const piece = this.engine.board[row][col];
 
-        // If a piece is selected and this is a legal move
         if (this.selected) {
             const isLegal = this.legalMoves.some(([tr, tc]) => tr === row && tc === col);
             if (isLegal) {
@@ -908,7 +780,6 @@ class BoardRenderer {
             }
         }
 
-        // Select piece
         if (piece) {
             const currentTurn = this.engine.turn;
             if (piece.color === currentTurn) {
@@ -922,7 +793,6 @@ class BoardRenderer {
             }
         }
 
-        // Deselect
         this.selected = null;
         this.legalMoves = [];
         this.render();
@@ -940,25 +810,19 @@ class BoardRenderer {
         this.lastMove = { from: [fromR, fromC], to: [toR, toC] };
         this.render();
 
-        // Promotion
         if (result.promotion) {
-            this.showPromotion(toR, toC);
+            this.showPromotion(result.toR, result.toC);
             return;
         }
 
-        // Check game status
         this.checkGameStatus();
 
         if (this.onMove) {
-            const files = 'abcdefgh';
-            const from = files[fromC] + (8 - fromR);
-            const to = files[toC] + (8 - toR);
-            this.onMove(from, to);
+            this.onMove();
         }
     }
 
     showPromotion(row, col) {
-        const container = this.container;
         const modal = document.createElement('div');
         modal.className = 'promotion-modal';
         const options = document.createElement('div');
@@ -971,8 +835,7 @@ class BoardRenderer {
         for (const type of types) {
             const btn = document.createElement('div');
             btn.className = 'promotion-option';
-            const symbol = color === 'white' ? labels[type].toUpperCase() : labels[type];
-            btn.textContent = symbol;
+            btn.textContent = color === 'white' ? labels[type].toUpperCase() : labels[type];
             btn.style.fontSize = '2.5rem';
             btn.onclick = () => {
                 this.engine.promote(row, col, type);
@@ -980,14 +843,14 @@ class BoardRenderer {
                 this.render();
                 this.checkGameStatus();
                 if (this.onMove) {
-                    this.onMove('promotion', 'promotion');
+                    this.onMove();
                 }
             };
             options.appendChild(btn);
         }
 
         modal.appendChild(options);
-        container.appendChild(modal);
+        this.container.appendChild(modal);
     }
 
     checkGameStatus() {
@@ -1028,7 +891,7 @@ class BoardRenderer {
             onShow: () => {
                 document.getElementById('rematchBtn')?.addEventListener('click', () => {
                     Modal.close();
-                    this.resetGame();
+                    resetComputerGame();
                 });
                 document.getElementById('homeBtn')?.addEventListener('click', () => {
                     Modal.close();
@@ -1045,7 +908,7 @@ class BoardRenderer {
         this.lastMove = null;
         this.isAIThinking = false;
         this.render();
-        updateUI();
+        updateComputerUI();
     }
 
     setOrientation(orientation) {
@@ -1063,15 +926,19 @@ class BoardRenderer {
 }
 
 // ============================
-// 8. PAGE NAVIGATION// ============================
+// 8. GLOBAL VARIABLES
+// ============================
 
 let currentPage = 'home';
 let boardRenderer = null;
-let aiEngine = new StockfishAI('medium');
 let gameEngine = new ChessEngine();
+let aiEngine = new StockfishAI('medium');
 let playerColor = 'white';
 let difficulty = 'medium';
-let onlineGame = { roomCode: null, isHost: false, opponent: null, myColor: null, gameStarted: false };
+
+// ============================
+// 9. NAVIGATION
+// ============================
 
 function navigate(page) {
     currentPage = page;
@@ -1079,34 +946,22 @@ function navigate(page) {
     container.innerHTML = '';
     container.className = 'page-enter';
 
-    // Update nav
     document.querySelectorAll('.nav-link').forEach(el => {
         el.classList.toggle('active', el.dataset.page === page);
     });
 
     switch (page) {
-        case 'home':
-            renderHome(container);
-            break;
-        case 'computer':
-            renderComputer(container);
-            break;
-        case 'online':
-            renderOnline(container);
-            break;
-        case 'leaderboard':
-            renderLeaderboard(container);
-            break;
-        case 'profile':
-            renderProfile(container);
-            break;
-        default:
-            renderHome(container);
+        case 'home': renderHome(container); break;
+        case 'computer': renderComputer(container); break;
+        case 'online': renderOnline(container); break;
+        case 'leaderboard': renderLeaderboard(container); break;
+        case 'profile': renderProfile(container); break;
+        default: renderHome(container);
     }
 }
 
 // ============================
-// 9. HOME PAGE
+// 10. HOME PAGE
 // ============================
 
 function renderHome(container) {
@@ -1155,22 +1010,21 @@ function renderHome(container) {
 }
 
 // ============================
-// 10. COMPUTER PAGE
+// 11. COMPUTER PAGE (FIXED)
 // ============================
 
 function renderComputer(container) {
     const user = Auth.getUser();
     const username = user?.username || 'You';
 
-    // Check if we need to show settings first
     const settings = storage.get('computerSettings');
-    if (!settings || !settings.difficulty || !settings.color) {
-        showComputerSettings(() => renderComputer(container));
-        return;
+    if (settings) {
+        difficulty = settings.difficulty || 'medium';
+        playerColor = settings.color || 'white';
+    } else {
+        difficulty = 'medium';
+        playerColor = 'white';
     }
-
-    difficulty = settings.difficulty || 'medium';
-    playerColor = settings.color || 'white';
 
     gameEngine = new ChessEngine();
     aiEngine = new StockfishAI(difficulty);
@@ -1181,7 +1035,7 @@ function renderComputer(container) {
                 <h2 style="font-size:1.3rem;font-weight:700;">🤖 Play vs Computer</h2>
                 <div style="display:flex;gap:6px;flex-wrap:wrap;">
                     <button class="btn btn-sm btn-secondary" onclick="resetComputerGame()">🔄 New Game</button>
-                    <button class="btn btn-sm btn-secondary" onclick="showComputerSettings(() => renderComputer(document.getElementById('pageContainer')))">⚙ Settings</button>
+                    <button class="btn btn-sm btn-secondary" onclick="showComputerSettings()">⚙ Settings</button>
                 </div>
             </div>
 
@@ -1208,7 +1062,7 @@ function renderComputer(container) {
                     </div>
 
                     <div class="status-message" id="statusMessage">
-                        <span>Game started</span>
+                        <span>Your turn</span>
                     </div>
                 </div>
 
@@ -1235,29 +1089,39 @@ function renderComputer(container) {
     // Initialize board
     setTimeout(() => {
         const boardContainer = document.getElementById('boardContainer');
+        if (!boardContainer) return;
+
         boardRenderer = new BoardRenderer(boardContainer, {
             engine: gameEngine,
             orientation: playerColor,
-            onMove: (from, to) => {
-                updateMoveHistory();
-                updateStatusMessage('Computer is thinking...');
+            onMove: () => {
+                updateComputerUI();
                 // AI move after delay
-                setTimeout(() => makeAIMove(), 400 + Math.random() * 600);
+                if (gameEngine.status === 'playing') {
+                    setTimeout(() => makeAIMove(), 400 + Math.random() * 600);
+                }
             }
         });
         boardRenderer.isAIThinking = false;
 
+        updateComputerUI();
+
         // If playing as black, AI moves first
-        if (playerColor === 'black') {
+        if (playerColor === 'black' && gameEngine.status === 'playing') {
             setTimeout(() => makeAIMove(), 600);
         }
-
-        updateUI();
     }, 50);
+
+    updateUI();
 }
 
+// ============================
+// 12. AI MOVE
+// ============================
+
 function makeAIMove() {
-    if (!boardRenderer || boardRenderer.isAIThinking) return;
+    if (!boardRenderer) return;
+    if (boardRenderer.isAIThinking) return;
     if (gameEngine.status === 'checkmate' || gameEngine.status === 'stalemate' || gameEngine.status === 'draw') return;
 
     const color = gameEngine.turn;
@@ -1275,18 +1139,14 @@ function makeAIMove() {
             return;
         }
 
-        const fromR = move.from[0],
-            fromC = move.from[1];
-        const toR = move.to[0],
-            toC = move.to[1];
+        const fromR = move.from[0], fromC = move.from[1];
+        const toR = move.to[0], toC = move.to[1];
 
         const result = gameEngine.makeMove(fromR, fromC, toR, toC);
         if (result) {
             boardRenderer.render();
-            updateMoveHistory();
-            updateStatusMessage(gameEngine.turn === playerColor ? 'Your turn' : 'Computer is thinking...');
+            updateComputerUI();
 
-            // Check game over
             if (gameEngine.status === 'checkmate') {
                 const winner = gameEngine.turn === 'white' ? 'Black' : 'White';
                 Toast.success(`🏆 Checkmate! ${winner} wins!`);
@@ -1301,9 +1161,10 @@ function makeAIMove() {
 
             boardRenderer.isAIThinking = false;
 
-            // If game still going and it's AI's turn again
             if (gameEngine.turn === aiColor && gameEngine.status === 'playing') {
                 setTimeout(() => makeAIMove(), 500);
+            } else if (gameEngine.status === 'playing') {
+                updateStatusMessage('Your turn');
             }
         } else {
             boardRenderer.isAIThinking = false;
@@ -1311,12 +1172,51 @@ function makeAIMove() {
     }, 300 + Math.random() * 400);
 }
 
+// ============================
+// 13. COMPUTER UI HELPERS
+// ============================
+
+function updateComputerUI() {
+    updateMoveHistory();
+    updateStatusMessage(gameEngine.turn === playerColor ? 'Your turn' : 'Computer is thinking...');
+}
+
+function updateStatusMessage(msg) {
+    const el = document.getElementById('statusMessage');
+    if (el) {
+        const span = el.querySelector('span') || el;
+        span.textContent = msg || (gameEngine.turn === playerColor ? 'Your turn' : 'Computer is thinking...');
+    }
+}
+
+function updateMoveHistory() {
+    const container = document.getElementById('moveHistory');
+    if (!container) return;
+    const moves = gameEngine.moveLog;
+    if (moves.length === 0) {
+        container.innerHTML = '<div class="empty">No moves yet</div>';
+        return;
+    }
+    let html = '';
+    for (let i = 0; i < moves.length; i += 2) {
+        const num = Math.floor(i / 2) + 1;
+        const w = moves[i]?.notation || '';
+        const b = moves[i + 1]?.notation || '';
+        html += `<div class="move-row">
+            <span class="num">${num}.</span>
+            <span class="white">${w}</span>
+            <span class="black">${b}</span>
+        </div>`;
+    }
+    container.innerHTML = html;
+    container.scrollTop = container.scrollHeight;
+}
+
 function resetComputerGame() {
     if (boardRenderer) {
         boardRenderer.resetGame();
-        updateMoveHistory();
-        updateStatusMessage('Game started');
-        if (playerColor === 'black') {
+        updateComputerUI();
+        if (playerColor === 'black' && gameEngine.status === 'playing') {
             setTimeout(() => makeAIMove(), 500);
         }
     }
@@ -1328,8 +1228,7 @@ function undoComputerMove() {
         Toast.warning('Computer is thinking...');
         return;
     }
-    // Simplified undo - just reset
-    Toast.info('Undo feature: restarting game');
+    Toast.info('Undo: restarting game');
     resetComputerGame();
 }
 
@@ -1368,7 +1267,7 @@ function resignComputerGame() {
     });
 }
 
-function showComputerSettings(callback) {
+function showComputerSettings() {
     const settings = storage.get('computerSettings') || { difficulty: 'medium', color: 'white' };
 
     Modal.show({
@@ -1403,8 +1302,7 @@ function showComputerSettings(callback) {
                 const color = document.querySelector('[data-color].btn-primary')?.dataset.color || 'white';
                 storage.set('computerSettings', { difficulty: diff, color });
                 Modal.close();
-                if (callback) callback();
-                else navigate('computer');
+                navigate('computer');
             }}
         ],
         onShow: () => {
@@ -1426,39 +1324,8 @@ function showComputerSettings(callback) {
     });
 }
 
-function updateMoveHistory() {
-    const container = document.getElementById('moveHistory');
-    if (!container) return;
-    const moves = gameEngine.moveLog;
-    if (moves.length === 0) {
-        container.innerHTML = '<div class="empty">No moves yet</div>';
-        return;
-    }
-    let html = '';
-    for (let i = 0; i < moves.length; i += 2) {
-        const num = Math.floor(i / 2) + 1;
-        const w = moves[i]?.notation || '';
-        const b = moves[i + 1]?.notation || '';
-        html += `<div class="move-row">
-            <span class="num">${num}.</span>
-            <span class="white">${w}</span>
-            <span class="black">${b}</span>
-        </div>`;
-    }
-    container.innerHTML = html;
-    container.scrollTop = container.scrollHeight;
-}
-
-function updateStatusMessage(msg) {
-    const el = document.getElementById('statusMessage');
-    if (el) {
-        const span = el.querySelector('span') || el;
-        span.textContent = msg || (gameEngine.turn === playerColor ? 'Your turn' : 'Computer is thinking...');
-    }
-}
-
 // ============================
-// 11. ONLINE PAGE
+// 14. ONLINE PAGE (SIMPLIFIED)
 // ============================
 
 let onlineRoomCode = null;
@@ -1479,12 +1346,6 @@ function renderOnline(container) {
                 <button class="btn btn-primary" onclick="document.getElementById('authBtn').click()">Login</button>
             </div>
         `;
-        return;
-    }
-
-    // Check if we're in a game
-    if (onlineGameStarted) {
-        renderOnlineGame(container);
         return;
     }
 
@@ -1522,13 +1383,11 @@ function createOnlineRoom() {
     const code = generateRoomCode();
     onlineRoomCode = code;
     onlineIsHost = true;
-    onlineGameStarted = true;
     onlineMyColor = 'white';
     onlineOpponent = { username: 'Waiting...', rating: 0 };
 
     Toast.success(`Room created: ${code}`);
 
-    // Show room code modal
     Modal.show({
         title: '🏠 Room Created',
         content: `
@@ -1555,19 +1414,14 @@ function createOnlineRoom() {
                 });
             });
 
-            // Simulate opponent joining after 3-6 seconds
             setTimeout(() => {
-                if (onlineGameStarted) {
-                    onlineOpponent = { username: 'Friend', rating: 1250 };
-                    Modal.close();
-                    Toast.success('Opponent joined!');
-                    renderOnlineGame(document.getElementById('pageContainer'));
-                }
+                onlineOpponent = { username: 'Friend', rating: 1250 };
+                Modal.close();
+                Toast.success('Opponent joined!');
+                startOnlineGame();
             }, 3000 + Math.random() * 3000);
         }
     });
-
-    renderOnlineGame(document.getElementById('pageContainer'));
 }
 
 function joinOnlineRoom() {
@@ -1580,17 +1434,11 @@ function joinOnlineRoom() {
 
     onlineRoomCode = code;
     onlineIsHost = false;
-    onlineGameStarted = true;
     onlineMyColor = 'black';
     onlineOpponent = { username: 'Host', rating: 1300 };
 
     Toast.success(`Joined room ${code}`);
-
-    // Simulate game start
-    setTimeout(() => {
-        renderOnlineGame(document.getElementById('pageContainer'));
-        Toast.info('Game started! You are Black.');
-    }, 500);
+    setTimeout(() => startOnlineGame(), 500);
 }
 
 function generateRoomCode() {
@@ -1602,11 +1450,16 @@ function generateRoomCode() {
     return code;
 }
 
+function startOnlineGame() {
+    onlineGameStarted = true;
+    onlineEngine = new ChessEngine();
+    navigate('online');
+    renderOnlineGame(document.getElementById('pageContainer'));
+}
+
 function renderOnlineGame(container) {
     const user = Auth.getUser();
     const username = user?.username || 'You';
-
-    onlineEngine = new ChessEngine();
 
     container.innerHTML = `
         <div class="container" style="padding:12px 0;">
@@ -1659,43 +1512,27 @@ function renderOnlineGame(container) {
                             <button class="btn btn-sm btn-danger" onclick="resignOnlineGame()">🏳 Resign</button>
                         </div>
                     </div>
-
-                    <div class="card" style="padding:12px;margin-top:10px;">
-                        <h4 style="font-size:0.8rem;font-weight:600;margin-bottom:4px;">Chat</h4>
-                        <div id="chatMessages" style="max-height:80px;overflow-y:auto;font-size:0.8rem;line-height:1.6;background:var(--bg-secondary);border-radius:var(--radius-sm);padding:6px 8px;margin-bottom:6px;">
-                            <div style="color:var(--text-muted);text-align:center;">Say hello!</div>
-                        </div>
-                        <div style="display:flex;gap:6px;">
-                            <input type="text" id="chatInput" class="input" placeholder="Message..." style="flex:1;padding:4px 10px;font-size:0.8rem;" maxlength="60" />
-                            <button class="btn btn-sm btn-primary" id="sendChatBtn">Send</button>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
     `;
 
-    // Setup board
     setTimeout(() => {
         const boardContainer = document.getElementById('boardContainer');
+        if (!boardContainer) return;
+
         onlineBoard = new BoardRenderer(boardContainer, {
             engine: onlineEngine,
             orientation: onlineMyColor,
-            onMove: (from, to) => {
-                updateOnlineMoveHistory();
-                updateOnlineStatus('Opponent\'s turn');
-                // Simulate opponent move
-                setTimeout(() => simulateOpponentMove(), 600 + Math.random() * 800);
+            onMove: () => {
+                updateOnlineUI();
+                if (onlineEngine.status === 'playing') {
+                    setTimeout(() => simulateOpponentMove(), 600 + Math.random() * 800);
+                }
             }
         });
 
         updateOnlineUI();
-
-        // Chat
-        document.getElementById('sendChatBtn')?.addEventListener('click', sendChatMessage);
-        document.getElementById('chatInput')?.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') sendChatMessage();
-        });
     }, 50);
 }
 
@@ -1715,8 +1552,7 @@ function simulateOpponentMove() {
     const result = onlineEngine.makeMove(move.from[0], move.from[1], move.to[0], move.to[1]);
     if (result) {
         onlineBoard.render();
-        updateOnlineMoveHistory();
-        updateOnlineStatus('Your turn');
+        updateOnlineUI();
 
         if (onlineEngine.status === 'checkmate') {
             Toast.success('🏆 You win!');
@@ -1728,15 +1564,7 @@ function simulateOpponentMove() {
     }
 }
 
-function updateOnlineStatus(msg) {
-    const el = document.getElementById('statusMessage');
-    if (el) {
-        const span = el.querySelector('span') || el;
-        span.textContent = msg || (onlineEngine.turn === onlineMyColor ? 'Your turn' : 'Opponent\'s turn');
-    }
-}
-
-function updateOnlineMoveHistory() {
+function updateOnlineUI() {
     const container = document.getElementById('moveHistory');
     if (!container) return;
     const moves = onlineEngine.moveLog;
@@ -1757,33 +1585,12 @@ function updateOnlineMoveHistory() {
     }
     container.innerHTML = html;
     container.scrollTop = container.scrollHeight;
-}
 
-function updateOnlineUI() {
-    updateOnlineStatus();
-    updateOnlineMoveHistory();
-}
-
-function sendChatMessage() {
-    const input = document.getElementById('chatInput');
-    const msg = input.value.trim();
-    if (!msg) return;
-
-    const container = document.getElementById('chatMessages');
-    const div = document.createElement('div');
-    div.innerHTML = `<strong>You:</strong> ${msg}`;
-    container.appendChild(div);
-    container.scrollTop = container.scrollHeight;
-    input.value = '';
-
-    // Simulate opponent response
-    setTimeout(() => {
-        const responses = ['Good move!', 'Nice!', 'Interesting...', 'Hmm', '👍', 'Well played!'];
-        const div2 = document.createElement('div');
-        div2.innerHTML = `<strong>${onlineOpponent?.username || 'Opponent'}:</strong> ${responses[Math.floor(Math.random() * responses.length)]}`;
-        container.appendChild(div2);
-        container.scrollTop = container.scrollHeight;
-    }, 1000 + Math.random() * 1500);
+    const statusEl = document.getElementById('statusMessage');
+    if (statusEl) {
+        const span = statusEl.querySelector('span') || statusEl;
+        span.textContent = onlineEngine.turn === onlineMyColor ? 'Your turn' : 'Opponent\'s turn';
+    }
 }
 
 function offerDraw() {
@@ -1878,7 +1685,7 @@ function leaveOnlineRoom() {
 }
 
 // ============================
-// 12. LEADERBOARD PAGE
+// 15. LEADERBOARD PAGE
 // ============================
 
 function renderLeaderboard(container) {
@@ -1943,7 +1750,7 @@ function generateLeaderboardData() {
 }
 
 // ============================
-// 13. PROFILE PAGE
+// 16. PROFILE PAGE
 // ============================
 
 function renderProfile(container) {
@@ -2029,7 +1836,7 @@ function renderProfile(container) {
 }
 
 // ============================
-// 14. UI HELPERS
+// 17. UI HELPERS
 // ============================
 
 function updateUI() {
@@ -2049,10 +1856,9 @@ function updateAuthUI() {
 }
 
 // ============================
-// 15. NAVIGATION SETUP
+// 18. NAVIGATION SETUP
 // ============================
 
-// Make functions globally accessible
 window.navigate = navigate;
 window.resetComputerGame = resetComputerGame;
 window.undoComputerMove = undoComputerMove;
@@ -2064,16 +1870,14 @@ window.offerDraw = offerDraw;
 window.resignOnlineGame = resignOnlineGame;
 
 // ============================
-// 16. INITIALIZATION
+// 19. INITIALIZATION
 // ============================
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize systems
     Toast.init();
     Modal.init();
     Auth.init();
 
-    // Theme toggle
     const themeToggle = document.getElementById('themeToggle');
     const theme = storage.get('theme', 'dark');
     document.documentElement.setAttribute('data-theme', theme);
@@ -2086,7 +1890,6 @@ document.addEventListener('DOMContentLoaded', function() {
         themeToggle.textContent = next === 'dark' ? '☀️' : '🌙';
     });
 
-    // Auth button
     document.getElementById('authBtn').addEventListener('click', () => {
         if (Auth.isAuth()) {
             Auth.logout();
@@ -2098,14 +1901,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Mobile menu
     const mobileBtn = document.getElementById('mobileMenuBtn');
     const navLinks = document.getElementById('navLinks');
     mobileBtn.addEventListener('click', () => {
         navLinks.classList.toggle('open');
     });
 
-    // Navigation links
     document.querySelectorAll('.nav-link').forEach(el => {
         el.addEventListener('click', (e) => {
             e.preventDefault();
@@ -2117,18 +1918,16 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Brand click
     document.querySelector('.nav-brand').addEventListener('click', () => {
         navigate('home');
         navLinks.classList.remove('open');
     });
 
-    // Load home page
     navigate('home');
 });
 
 // ============================
-// 17. AUTH MODAL
+// 20. AUTH MODAL
 // ============================
 
 function showAuthModal() {
@@ -2193,22 +1992,3 @@ function showAuthModal() {
         }
     });
 }
-
-// ============================
-// 18. KEYBOARD SHORTCUTS
-// ============================
-
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-        Modal.close();
-    }
-    if (e.ctrlKey && e.key === 'r') {
-        e.preventDefault();
-        if (currentPage === 'computer') resetComputerGame();
-        if (currentPage === 'online') resetOnlineGame();
-    }
-    if (e.ctrlKey && e.key === 'h') {
-        e.preventDefault();
-        if (currentPage === 'computer') showHint();
-    }
-});
